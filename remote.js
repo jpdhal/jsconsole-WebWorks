@@ -61,25 +61,43 @@ function stringify(o, simple) {
 }
 
 
-function getLastChild(el) {
-  return (el.lastChild && el.lastChild.nodeName != '#text') ? getLastChild(el.lastChild) : el;
+// Plugins that inject are screwing this up :(
+// function getLastChild(el) {
+//   return (el.lastChild && el.lastChild.nodeName != '#text') ? getLastChild(el.lastChild) : el;
+// }
+
+function getRemoteScript() {
+  var scripts = document.getElementsByTagName('script'),
+      remoteScript = null;
+  for (var i = 0; i < scripts.length; i++) {
+    if (scripts[i].src.indexOf('jsconsole.com/remote.js') !== -1) {
+      remoteScript = scripts[i];
+      break;
+    }
+  }
+  
+  return remoteScript;
 }
 
-var last = getLastChild(document.lastChild);
+var last = getRemoteScript();
 
-if (last.getAttribute('id') == '_firebugConsole') { // if Firebug is open, this all goes to crap
-  last = last.previousElementSibling;
-} 
+// if (last.getAttribute('id') == '_firebugConsole') { // if Firebug is open, this all goes to crap
+//   last = last.previousElementSibling;
+// } 
 
 var lastSrc = last.getAttribute('src'),
     id = lastSrc.replace(/.*\?/, ''),
     origin = 'http://' + lastSrc.substr(7).replace(/\/.*$/, ''),
-    remoteWindow = null;
+    remoteWindow = null,
+    queue = [],
+    msgType = '';
 
 var remoteFrame = document.createElement('iframe');
 remoteFrame.style.display = 'none';
 remoteFrame.src = origin + '/remote.html?' + id;
-document.body.appendChild(remoteFrame);
+
+// this is new - in an attempt to allow this code to be included in the head element
+document.documentElement.appendChild(remoteFrame);
 
 
 window.addEventListener('message', function (event) {
@@ -104,7 +122,20 @@ var remote = {
     [].forEach.call(arguments, function (args) {
       response.push(stringify(args, true));
     });
-    remoteWindow && remoteWindow.postMessage(JSON.stringify({ response: response, cmd: 'remote console.log' }), origin);
+
+	var msg = JSON.stringify({ response: response, cmd: 'remote console.log', type: msgType });
+
+    if (remoteWindow) {
+      remoteWindow.postMessage(msg, origin);
+    } else {
+      queue.push(msg);
+    }
+    
+    msgType = '';
+  },
+  info: function () {
+    msgType = 'info';
+    remote.log.apply(this, arguments);
   },
   echo: function () {
     var args = [].slice.call(arguments, 0),
@@ -112,19 +143,37 @@ var remote = {
         cmd = args.pop(),
         response = args;
 
-    var argsObj = stringify(response, plain);
-    remoteWindow && remoteWindow.postMessage(JSON.stringify({ response: argsObj, cmd: cmd }), origin);
+    var argsObj = stringify(response, plain),
+        msg = JSON.stringify({ response: argsObj, cmd: cmd });
+    if (remoteWindow) {
+      remoteWindow.postMessage(msg, origin);
+    } else {
+      queue.push(msg);
+    }
   },
   error: function (error, cmd) {
-    remoteWindow && remoteWindow.postMessage(JSON.stringify({ response: error.message, cmd: cmd, type: 'error' }), origin);
+    var msg = JSON.stringify({ response: error.message, cmd: cmd, type: 'error' });
+    if (remoteWindow) {
+      remoteWindow.postMessage(msg, origin);
+    } else {
+      queue.push(msg);
+    }
   }
 };
+
+// just for extra support
+remote.debug = remote.dir = remote.log;
+remote.warn = remote.info;
 
 remoteFrame.onload = function () {
   remoteWindow = remoteFrame.contentWindow;
   remoteWindow.postMessage('__init__', origin);
   
-  remoteWindow.postMessage(JSON.stringify({ response: 'Connection established with ' + navigator.userAgent, type: 'info' }), origin);
+  remoteWindow.postMessage(stringify({ response: 'Connection established with ' + navigator.userAgent, type: 'info' }), origin);
+  
+  for (var i = 0; i < queue.length; i++) {
+    remoteWindow.postMessage(queue[i], origin);
+  }
 };
 
 window.remote = remote;

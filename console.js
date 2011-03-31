@@ -74,7 +74,8 @@ function run(cmd) {
     xhr.open('POST', 'http://jsconsole.com/remote/' + remoteId + '/run', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.send(params);
-    // return ['info', 'sent remote command'];
+	setCursorTo('');
+    return ['info', 'sent remote command'];
   } else {
     try {
       if ('CoffeeScript' in sandboxframe.contentWindow) cmd = sandboxframe.contentWindow.CoffeeScript.compile(cmd, {bare:true});
@@ -84,7 +85,7 @@ function run(cmd) {
       className = 'error';
     }
     return [className, cleanse(stringify(rawoutput))];
-  } 
+  }
 }
 
 function post(cmd, blind, response /* passed in when echoing from remote console */) {
@@ -97,7 +98,7 @@ function post(cmd, blind, response /* passed in when echoing from remote console
     if (historySupported) {
       window.myHistory.pushState(cmd, cmd, '?' + encodeURIComponent(cmd));
     }
-  } 
+  }
 
   if (!remoteId || response) echo(cmd);
 
@@ -113,7 +114,7 @@ function post(cmd, blind, response /* passed in when echoing from remote console
     el.className = 'response';
     if((typeof response[1]) === 'string')
       span.innerHTML = response[1];
-    
+
     if (response[0] != 'info') prettyPrint([span]);
     el.appendChild(span);
 
@@ -128,7 +129,7 @@ function post(cmd, blind, response /* passed in when echoing from remote console
       exec.value = '';
       if (enableCC) {
         try {
-          document.querySelector('a').focus();
+          document.getElementsByTagName('a')[0].focus();
           cursor.focus();
           document.execCommand('selectAll', false, null);
           document.execCommand('delete', false, null);
@@ -158,7 +159,22 @@ function echo(cmd) {
   li.className = 'echo';
   li.innerHTML = '<span class="gutter"></span><div>' + cleanse(cmd) + '<a href="/?' + encodeURIComponent(cmd) + '" class="permalink" title="permalink">link</a></div>';
 
-  logAfter = output.querySelectorAll('li.echo')[0] || null;
+  logAfter = null;
+
+  if (document.querySelectorAll) {
+    logAfter = output.querySelectorAll('li.echo')[0] || null;
+  } else {
+    var lis = document.getElementsByTagName('li'),
+        len = lis.length;
+    for (var i = 0; i < len; i++) {
+      if (lis[i].className.indexOf('echo') !== -1) {
+        logAfter = lis[i];
+        break;
+      }
+    }
+  }
+
+  // logAfter = output.querySelectorAll('li.echo')[0] || null;
   appendLog(li, true);
 }
 
@@ -179,7 +195,7 @@ function appendLog(el, echo) {
       output.appendChild(el);
     } else {
       output.insertBefore(el, output.firstChild);
-    }      
+    }
   } else {
     // if (!output.lastChild) {
     //   output.appendChild(el);
@@ -193,7 +209,7 @@ function appendLog(el, echo) {
 
 function changeView(event){
   if (enableCC) return;
-  
+
   var which = event.which || event.keyCode;
   if (which == 38 && event.shiftKey == true) {
     body.className = '';
@@ -222,6 +238,7 @@ function showhelp() {
     ':load &lt;url&gt; - to inject new DOM',
     ':load &lt;script_url&gt; - to inject external library',
     '      load also supports following shortcuts: <br />      jquery, underscore, prototype, mootools, dojo, rightjs, coffeescript, yui. <br />      eg. :load jquery',
+    ':listen [id] - to start <a href="#" onclick="'+"PlaybookExtentions.runBrowser('http://jsconsole.com/remote-debugging.html');return false;"+'">remote debugging</a> session',
     ':clear - to clear the history (accessed using cursor keys)',
     ':blackberry - remove the sandbox and connect the console to the window directly <br />      Allows you to make WebWorks calls. Type <b>blackberry</b> to take a peak.',
     ':sandbox - return to sandbox mode from blackberry mode.',
@@ -229,18 +246,18 @@ function showhelp() {
     ':about'
     //'Directions to <a href="/inject.html">inject</a> JS Console in to any page (useful for mobile debugging)'
   ];
-    
+
   if (injected) {
     commands.push(':close - to hide the JS Console');
   }
-  
+
   // commands = commands.concat([
   //   'up/down - cycle history',
   //   'shift+up - single line command',
-  //   'shift+down - multiline command', 
+  //   'shift+down - multiline command',
   //   'shift+enter - to run command in multiline mode'
   // ]);
-  
+
   return commands.join('\n');
 }
 
@@ -250,7 +267,7 @@ function load(url) {
       return loadScript.apply(this, arguments);
     } else {
       return loadDOM(url);
-    }    
+    }
   } else {
     return "You need to be online to use :load";
   }
@@ -279,9 +296,9 @@ function loadDOM(url) {
   var doc = sandboxframe.contentWindow.document,
       script = document.createElement('script'),
       cb = 'loadDOM' + +new Date;
-      
+
   script.src = 'http://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20html%20where%20url%3D%22' + encodeURIComponent(url) + '%22&format=xml&callback=' + cb;
-  
+
   window[cb] = function (yql) {
     if (yql.results.length) {
       var html = yql.results[0].replace(/type="text\/javascript"/ig,'type="x"').replace(/<body.*?>/, '').replace(/<\/body>/, '');
@@ -294,12 +311,12 @@ function loadDOM(url) {
     try {
       window[cb] = null;
       delete window[cb];
-    } catch (e) {}      
-    
+    } catch (e) {}
+
   };
-  
+
   document.body.appendChild(script);
-  
+
   return "Loading url into DOM...";
 }
 
@@ -308,7 +325,7 @@ function checkTab(evt) {
       ss = t.selectionStart,
       se = t.selectionEnd,
       tab = "  ";
-  
+
 
   // Tab key - insert tab expansion
   if (evt.keyCode == 9) {
@@ -375,26 +392,26 @@ var ccPosition = false;
 
 function getProps(cmd, filter) {
   var surpress = {}, props = [];
-  
+
   if (!ccCache[cmd]) {
     try {
       // surpress alert boxes because they'll actually do something when we're looking
       // up properties inside of the command we're running
       surpress.alert = sandboxframe.contentWindow.alert;
       sandboxframe.contentWindow.alert = function () {};
-      
+
       // loop through all of the properties available on the command (that's evaled)
       ccCache[cmd] = sandboxframe.contentWindow.eval('console.props(' + cmd + ')').sort();
-      
+
       // return alert back to it's former self
       delete sandboxframe.contentWindow.alert;
     } catch (e) {
       ccCache[cmd] = [];
     }
-    
-    // if the return value is undefined, then it means there's no props, so we'll 
+
+    // if the return value is undefined, then it means there's no props, so we'll
     // empty the code completion
-    if (ccCache[cmd][0] == 'undefined') ccOptions[cmd] = [];    
+    if (ccCache[cmd][0] == 'undefined') ccOptions[cmd] = [];
     ccPosition = 0;
     props = ccCache[cmd];
   } else if (filter) {
@@ -409,8 +426,8 @@ function getProps(cmd, filter) {
   } else {
     props = ccCache[cmd];
   }
-  
-  return props; 
+
+  return props;
 }
 
 function codeComplete(event) {
@@ -419,22 +436,22 @@ function codeComplete(event) {
       which = whichKey(event),
       cc,
       props = [];
-  
+
   if (cmd) {
     // get the command without the dot to allow us to introspect
     if (cmd.substr(-1) == '.') {
       // get the command without the '.' so we can eval it and lookup the properties
       cmd = cmd.substr(0, cmd.length - 1);
-      
+
       // returns an array of all the properties from the command
       props = getProps(cmd);
     } else {
       props = getProps(parts.slice(0, parts.length - 1).join('.') || 'window', parts[parts.length - 1]);
     }
-    
+
     if (props.length) {
       if (which == 9) { // tabbing cycles through the code completion
-        
+
         // however if there's only one selection, it'll auto complete
         if (props.length === 1) {
           ccPosition = false;
@@ -445,11 +462,11 @@ function codeComplete(event) {
           } else {
             ccPosition = ccPosition == props.length - 1 ? 0 : ccPosition+1;
           }
-        }      
+        }
       } else {
         ccPosition = 0;
       }
-    
+
       if (ccPosition === false) {
         completeCode();
       } else {
@@ -458,7 +475,7 @@ function codeComplete(event) {
           cc = document.createElement('span');
           cc.className = 'suggest';
           exec.appendChild(cc);
-        } 
+        }
 
         cursor.nextSibling.innerHTML = props[ccPosition];
         exec.value = exec.textContent;
@@ -471,11 +488,11 @@ function codeComplete(event) {
   } else {
     ccPosition = false;
   }
-  
+
   if (ccPosition === false && cursor.nextSibling) {
     removeSuggestion();
   }
-  
+
   exec.value = exec.textContent;
 }
 
@@ -513,9 +530,9 @@ function showHistory() {
 
 function getHistory() {
   var history = [''];
-  
+
   if (typeof JSON == 'undefined') return myHistory;
-  
+
   try {
     // because FF with cookies disabled goes nuts, and because sometimes WebKit goes nuts too...
     myHistory = JSON.parse(sessionStorage.getItem('myHistory') || '[""]');
@@ -526,7 +543,7 @@ function getHistory() {
 // I should do this onunload...but I'm being lazy and hacky right now
 function setHistory(history) {
   if (typeof JSON == 'undefined') return;
-  
+
   try {
     // because FF with cookies disabled goes nuts, and because sometimes WebKit goes nuts too...
     sessionStorage.setItem('myHistory', JSON.stringify(myHistory));
@@ -544,10 +561,10 @@ function about() {
 }
 
 
-document.addEventListener ? 
+document.addEventListener ?
   window.addEventListener('message', function (event) {
     post(event.data);
-  }, false) : 
+  }, false) :
   window.attachEvent('onmessage', function () {
     post(window.event.data);
   });
@@ -560,7 +577,8 @@ var exec = document.getElementById('exec'),
     sandboxframe = injected ? window.top['JSCONSOLE'] : document.createElement('iframe'),
     oldsandboxframe = null,
     sandbox = null,
-    oldsandbox = null;
+    oldsandbox = null,
+    mode = 'sandbox'
     fakeConsole = 'window.top._console',
     myHistory = getHistory(),
     liveHistory = (window.myHistory.pushState !== undefined),
@@ -583,10 +601,10 @@ var exec = document.getElementById('exec'),
     sse = null,
     lastCmd = null,
     remoteId = null,
-    commands = { 
-      help: showhelp, 
+    commands = {
+      help: showhelp,
       about: about,
-      // loadjs: loadScript, 
+      // loadjs: loadScript,
       load: load,
       history: showHistory,
       clear: function () {
@@ -613,7 +631,7 @@ var exec = document.getElementById('exec'),
           sse = new EventSource('http://jsconsole.com/remote/' + id + '/log');
           sse.onopen = function () {
             remoteId = id;
-            window.top.info('Connected to "' + id + '"');
+            window.top.info('Connected to "' + id + '"\n\n<script src="http://jsconsole.com/remote.js?' + id + '"></script>');
           };
 
           sse.onmessage = function (event) {
@@ -625,7 +643,6 @@ var exec = document.getElementById('exec'),
             } else {
               if (data.cmd != 'remote console.log') data.response = data.response.substr(1, data.response.length - 2); // fiddle to remove the [] around the repsonse
               echo(data.cmd);
-              setCursorTo('');
               log(data.response, 'response');
             }
           };
@@ -648,7 +665,8 @@ var exec = document.getElementById('exec'),
           //this does allow for more mischief,  but since the only person doing the mischeif installed this app on their
           //device so *shrug*
 
-          if(sandboxframe != null){
+          if(mode !== 'bb'){
+              mode = 'bb';
               oldsandboxframe = sandboxframe;
               oldsandbox = sandbox;
               sandboxframe = {
@@ -656,18 +674,22 @@ var exec = document.getElementById('exec'),
                   currentDocument : document
               };
               //lets try this ;)
-              return "Attempting to enable Raw WebWorks Mode : <b style='color:red;'>Warning!!</b> This is no longer sandboxed because WebWorks does not inject the <i><b>blackberry</b></i> object into iframes";
+              return "Attempting to enable <b>blackberry</b> mode : <b style='color:red;'>Warning!!</b> This is no longer sandboxed because WebWorks does not inject the <i><b>blackberry</b></i> object into iframes";
           }
+          return "Already in <b>blackberry</b> mode";
 
 
 
       },
       sandbox : function(){
-          if(oldsandboxframe != null){
+          if(mode === 'bb'){
+            mode = 'sandbox';
             sandboxframe = oldsandboxframe;
             sandbox = oldsandbox;
-            return "Switched Back to Sandboxed Mode";
+
+            return "Switched Back to <b>sandbox</b> mode";
         }
+          return "Already in <b>sandbox</b> mode"
       },
       quit : function(){
           blackberry.app.exit();
@@ -685,7 +707,7 @@ if (enableCC) {
 
 if (!injected) {
   body.appendChild(sandboxframe);
-  sandboxframe.setAttribute('id', 'sandbox');  
+  sandboxframe.setAttribute('id', 'sandbox');
 }
 
 sandbox = sandboxframe.contentDocument || sandboxframe.contentWindow.document;
@@ -705,9 +727,9 @@ cursor.focus();
 output.parentNode.tabIndex = 0;
 
 function whichKey(event) {
-  var keys = {38:1, 40:1, Up:38, Down:40, Enter:10, 'U+0009':9, 'U+0008':8, 'U+0190':190, 'Right':39, 
+  var keys = {38:1, 40:1, Up:38, Down:40, Enter:10, 'U+0009':9, 'U+0008':8, 'U+0190':190, 'Right':39,
       // these two are ignored
-      'U+0028': 57, 'U+0026': 55 }; 
+      'U+0028': 57, 'U+0026': 55 };
   return keys[event.keyIdentifier] || event.which || event.keyCode;
 }
 
@@ -728,11 +750,11 @@ output.ontouchstart = output.onclick = function (event) {
   if (event.target.nodeName == 'A' && event.target.className == 'permalink') {
     var command = decodeURIComponent(event.target.search.substr(1));
     setCursorTo(command);
-    
+
     if (liveHistory) {
       window.myHistory.pushState(command, command, event.target.href);
     }
-    
+
     return false;
   }
 };
@@ -751,8 +773,8 @@ exec.onkeyup = function (event) {
 
 exec.onkeydown = function (event) {
   event = event || window.event;
-  var keys = {38:1, 40:1}, 
-      wide = body.className == 'large', 
+  var keys = {38:1, 40:1},
+      wide = body.className == 'large',
       which = whichKey(event);
 
   if (typeof which == 'string') which = which.replace(/\/U\+/, '\\u');
@@ -766,7 +788,7 @@ exec.onkeydown = function (event) {
       } else if (which == 40) { // down
         pos++;
         if (pos >= myHistory.length) pos = 0;
-      } 
+      }
       if (myHistory[pos] != undefined) {
         removeSuggestion();
         setCursorTo(myHistory[pos])
@@ -798,15 +820,15 @@ exec.onkeydown = function (event) {
 function completeCode(focus) {
   var tmp = exec.textContent, l = tmp.length;
   removeSuggestion();
-  
+
   cursor.innerHTML = tmp;
   ccPosition = false;
-  
+
   // daft hack to move the focus elsewhere, then back on to the cursor to
   // move the cursor to the end of the text.
   document.getElementsByTagName('a')[0].focus();
   cursor.focus();
-  
+
   var range, selection;
   if (document.createRange) {//Firefox, Chrome, Opera, Safari, IE 9+
     range = document.createRange();//Create a range (a range is a like the selection but invisible)
@@ -834,21 +856,20 @@ form.onsubmit = function (event) {
 document.onkeydown = function (event) {
   event = event || window.event;
   var which = event.which || event.keyCode;
-  
+
   if (event.shiftKey && event.metaKey && which == 8) {
     output.innerHTML = '';
     cursor.focus();
   } else if (event.target == output.parentNode && which == 32) { // space
     output.parentNode.scrollTop += 5 + output.parentNode.offsetHeight * (event.shiftKey ? -1 : 1);
   }
-  
+
   return changeView(event);
 };
 
 exec.onclick = function () {
   cursor.focus();
 }
-
 if (window.location.search) {
   post(decodeURIComponent(window.location.search.substr(1)));
 } else {

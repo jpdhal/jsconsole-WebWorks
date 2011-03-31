@@ -13,9 +13,9 @@ SET old_Java_home=%JAVA_HOME%
 SET JAVA_HOME=%installDir%\..\jre\bin
 SET mycskpassword=
 SET myp12password=
-set mybuildId=6
+set mybuildId=15
 
-del %name%.bar %name%.bar.sig
+del %name%.zip %name%.bar %name%.bar.sig
 
 zip -0 -r %name%.zip * -x .* *.exe *.bar *.zip *.bat
 %installDir%\bbwp %name%.zip -gcsk %mycskpassword% -gp12 %myp12password% -buildId %mybuildId% -o ./
