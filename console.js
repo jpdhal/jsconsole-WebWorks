@@ -221,7 +221,7 @@ function showhelp() {
   var commands = [
     ':load &lt;url&gt; - to inject new DOM',
     ':load &lt;script_url&gt; - to inject external library',
-    '      load also supports following shortcuts: <br />      jquery, underscore, prototype, mootools, dojo, rightjs, coffeescript, yui. eg. :load jquery',
+    '      load also supports following shortcuts: <br />      jquery, underscore, prototype, mootools, dojo, rightjs, coffeescript, yui. <br />      eg. :load jquery',
     ':clear - to clear the history (accessed using cursor keys)',
     ':blackberry - remove the sandbox and connect the console to the window directly <br />      Allows you to make WebWorks calls. Type <b>blackberry</b> to take a peak.',
     ':sandbox - return to sandbox mode from blackberry mode.',
