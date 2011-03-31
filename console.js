@@ -71,7 +71,7 @@ function run(cmd) {
     var xhr = new XMLHttpRequest(),
         params = 'data=' + encodeURIComponent(cmd);
 
-    xhr.open('POST', '/remote/' + remoteId + '/run', true);
+    xhr.open('POST', 'http://jsconsole.com/remote/' + remoteId + '/run', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.send(params);
     // return ['info', 'sent remote command'];
@@ -91,11 +91,11 @@ function post(cmd, blind, response /* passed in when echoing from remote console
   cmd = trim(cmd);
 
   if (blind === undefined) {
-    history.push(cmd);
-    setHistory(history);
+    myHistory.push(cmd);
+    setHistory(myHistory);
 
     if (historySupported) {
-      window.history.pushState(cmd, cmd, '?' + encodeURIComponent(cmd));
+      window.myHistory.pushState(cmd, cmd, '?' + encodeURIComponent(cmd));
     }
   } 
 
@@ -111,8 +111,9 @@ function post(cmd, blind, response /* passed in when echoing from remote console
 
   if (response !== undefined) {
     el.className = 'response';
-    span.innerHTML = response[1];
-
+    if((typeof response[1]) === 'string')
+      span.innerHTML = response[1];
+    
     if (response[0] != 'info') prettyPrint([span]);
     el.appendChild(span);
 
@@ -135,7 +136,7 @@ function post(cmd, blind, response /* passed in when echoing from remote console
       }
     }
   }
-  pos = history.length;
+  pos = myHistory.length;
 }
 
 function log(msg, className) {
@@ -222,8 +223,11 @@ function showhelp() {
     ':load &lt;script_url&gt; - to inject external library',
     '      load also supports following shortcuts: <br />      jquery, underscore, prototype, mootools, dojo, rightjs, coffeescript, yui. eg. :load jquery',
     ':clear - to clear the history (accessed using cursor keys)',
-    ':about',
-    'Directions to <a href="/inject.html">inject</a> JS Console in to any page (useful for mobile debugging)'
+    ':blackberry - remove the sandbox and connect the console to the window directly <br />      Allows you to make WebWorks calls. Type <b>blackberry</b> to take a peak.',
+    ':sandbox - return to sandbox mode from blackberry mode.',
+    ':quit',
+    ':about'
+    //'Directions to <a href="/inject.html">inject</a> JS Console in to any page (useful for mobile debugging)'
   ];
     
   if (injected) {
@@ -510,13 +514,13 @@ function showHistory() {
 function getHistory() {
   var history = [''];
   
-  if (typeof JSON == 'undefined') return history;
+  if (typeof JSON == 'undefined') return myHistory;
   
   try {
     // because FF with cookies disabled goes nuts, and because sometimes WebKit goes nuts too...
-    history = JSON.parse(sessionStorage.getItem('history') || '[""]');
+    myHistory = JSON.parse(sessionStorage.getItem('myHistory') || '[""]');
   } catch (e) {}
-  return history;
+  return myHistory;
 }
 
 // I should do this onunload...but I'm being lazy and hacky right now
@@ -525,12 +529,18 @@ function setHistory(history) {
   
   try {
     // because FF with cookies disabled goes nuts, and because sometimes WebKit goes nuts too...
-    sessionStorage.setItem('history', JSON.stringify(history));
+    sessionStorage.setItem('myHistory', JSON.stringify(myHistory));
   } catch (e) {}
 }
 
 function about() {
-  return 'Built by <a target="_new" href="http://twitter.com/rem">@rem</a>';
+
+  var html = '<span>Built by <a id="rem" target="_new" href="JavaScript:void()" onclick="';
+    html += "PlaybookExtentions.runBrowser('http://twitter.com/rem'); return false";
+    html+='">@rem</a> Hacked up for Playbook by <a id="muerl" target="_new" href="JavaScript:void()" onclick="';
+    html+= "PlaybookExtentions.runBrowser('http://twitter.com/muerl'); return false;";
+    html+='">@muerl</a></span>';
+    return html;
 }
 
 
@@ -548,10 +558,12 @@ var exec = document.getElementById('exec'),
     cursor = document.getElementById('exec'),
     injected = typeof window.top['JSCONSOLE'] !== 'undefined',
     sandboxframe = injected ? window.top['JSCONSOLE'] : document.createElement('iframe'),
+    oldsandboxframe = null,
     sandbox = null,
+    oldsandbox = null;
     fakeConsole = 'window.top._console',
-    history = getHistory(),
-    liveHistory = (window.history.pushState !== undefined),
+    myHistory = getHistory(),
+    liveHistory = (window.myHistory.pushState !== undefined),
     pos = 0,
     wide = true,
     libraries = {
@@ -566,7 +578,7 @@ var exec = document.getElementById('exec'),
     },
     body = document.getElementsByTagName('body')[0],
     logAfter = null,
-    historySupported = !!(window.history && window.history.pushState),
+    historySupported = !!(window.myHistory && window.myHistory.pushState),
     ccTimer = null,
     sse = null,
     lastCmd = null,
@@ -593,12 +605,12 @@ var exec = document.getElementById('exec'),
         // place script request for new listen ID and start SSE
         var script = document.createElement('script'),
             callback = '_cb' + +new Date;
-        script.src = '/remote/' + (id||'') + '?callback=' + callback;
+        script.src = 'http://jsconsole.com/remote/' + (id||'') + '?callback=' + callback;
 
         window[callback] = function (id) {
           remoteId = id;
           if (sse !== null) sse.close();
-          sse = new EventSource('/remote/' + id + '/log');
+          sse = new EventSource('http://jsconsole.com/remote/' + id + '/log');
           sse.onopen = function () {
             remoteId = id;
             window.top.info('Connected to "' + id + '"');
@@ -630,6 +642,35 @@ var exec = document.getElementById('exec'),
         };
         body.appendChild(script);
         return 'Creating connection...';
+      },
+      blackberry : function(){
+          //here we need to force the code in execute within this console, rather than within our sandboxed window.
+          //this does allow for more mischief,  but since the only person doing the mischeif installed this app on their
+          //device so *shrug*
+
+          if(sandboxframe != null){
+              oldsandboxframe = sandboxframe;
+              oldsandbox = sandbox;
+              sandboxframe = {
+                  contentWindow : window,
+                  currentDocument : document
+              };
+              //lets try this ;)
+              return "Attempting to enable Raw WebWorks Mode : <b style='color:red;'>Warning!!</b> This is no longer sandboxed because WebWorks does not inject the <i><b>blackberry</b></i> object into iframes";
+          }
+
+
+
+      },
+      sandbox : function(){
+          if(oldsandboxframe != null){
+            sandboxframe = oldsandboxframe;
+            sandbox = oldsandbox;
+            return "Switched Back to Sandboxed Mode";
+        }
+      },
+      quit : function(){
+          blackberry.app.exit();
       }
     },
     // I hate that I'm browser sniffing, but there's issues with Firefox and execCommand so code completion won't work
@@ -689,7 +730,7 @@ output.ontouchstart = output.onclick = function (event) {
     setCursorTo(command);
     
     if (liveHistory) {
-      window.history.pushState(command, command, event.target.href);
+      window.myHistory.pushState(command, command, event.target.href);
     }
     
     return false;
@@ -721,14 +762,14 @@ exec.onkeydown = function (event) {
     } else if (!wide) {
       if (which == 38) { // cycle up
         pos--;
-        if (pos < 0) pos = history.length - 1;
+        if (pos < 0) pos = myHistory.length - 1;
       } else if (which == 40) { // down
         pos++;
-        if (pos >= history.length) pos = 0;
+        if (pos >= myHistory.length) pos = 0;
       } 
-      if (history[pos] != undefined) {
+      if (myHistory[pos] != undefined) {
         removeSuggestion();
-        setCursorTo(history[pos])
+        setCursorTo(myHistory[pos])
         return false;
       }
     }
