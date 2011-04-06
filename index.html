@@ -41,15 +41,16 @@
 </head>
 <body>
 <form>
-  <textarea autofocus id="exec" spellcheck="false" autocapitalize="off" rows="1"></textarea>
+  <textarea id="exec" spellcheck="false" autocapitalize="off" rows="1"></textarea>
 </form>
 <div id="console">
   <ul id="output"></ul>
 </div>
-<div id="footer"><a href="/app/">Get the native iOS app</a> &bull; <a href="http://github.com/remy/jsconsole">Fork on Github</a> &bull; <a href="http://twitter.com/rem">Built by @rem</a></div>
+<div id="footer">Welcome to the native Playbook app &bull; <a href="" onclick="PlaybookExtentions.runBrowser('http://github.com/muerl/jsconsolewebworks'); return false">Fork on Github</a> &bull; <a href="" onclick="PlaybookExtentions.runBrowser('http://twitter.com/rem'); return false">Built by @rem</a> &bull; <a href="" onclick="PlaybookExtentions.runBrowser('http://twitter.com/muerl'); return false">Brought to WebWorks by @muerl</a></div>
 <script src="prettify.packed.js"></script>
 <script src="EventSource.js"></script>
 <script src="console.js"></script>
+<script src="PlaybookExtentions.js"></script>
 <script>var _gaq=[['_setAccount','UA-1656750-21'],['_trackPageview']];(function(d,t){
 var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
 g.async=1;g.src='//www.google-analytics.com/ga.js';s.parentNode.insertBefore(g,s)
