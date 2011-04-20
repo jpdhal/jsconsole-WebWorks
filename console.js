@@ -673,6 +673,10 @@ var exec = document.getElementById('exec'),
                   contentWindow : window,
                   currentDocument : document
               };
+              //we need to eat our own console and become stronger
+              //this way when we make calls to "console.log" inside extended webworks code its possible.
+                //TODO:  we need to retake our console after someone sandboxes
+              sandboxframe.contentWindow.eval('(function () { var fakeConsole = ' + fakeConsole + '; if (console != undefined) { for (var k in fakeConsole) { console[k] = fakeConsole[k]; } } else { console = fakeConsole; } })();');
               //lets try this ;)
               return "Attempting to enable <b>blackberry</b> mode : <b style='color:red;'>Warning!!</b> This is no longer sandboxed because WebWorks does not inject the <i><b>blackberry</b></i> object into iframes";
           }
@@ -697,7 +701,10 @@ var exec = document.getElementById('exec'),
     },
     // I hate that I'm browser sniffing, but there's issues with Firefox and execCommand so code completion won't work
     iOSMobile = navigator.userAgent.indexOf('AppleWebKit') !== -1 && navigator.userAgent.indexOf('Mobile') !== -1,
-    enableCC = navigator.userAgent.indexOf('AppleWebKit') !== -1 && navigator.userAgent.indexOf('Mobile') === -1;
+    //TODO: figure out why this is not working as intended in webworks.  It seems like touch events inside the "contenteditable" span
+    //do not work correctly so that we are not bringing up the keyboard when we should.
+    //also our keyboard if the user swiped it up does not always write to the view.
+    enableCC = false && navigator.userAgent.indexOf('AppleWebKit') !== -1 && navigator.userAgent.indexOf('Mobile') === -1;
 
 if (enableCC) {
   exec.parentNode.innerHTML = '<div autofocus id="exec" spellcheck="false"><span id="cursor" contenteditable></span></div>';
@@ -889,6 +896,7 @@ getProps('window'); // cache
 document.addEventListener('deviceready', function () {
   cursor.focus();
 }, false);
+
 
 // if (iOSMobile) {
 //   document.getElementById('footer').style.display = 'none';
