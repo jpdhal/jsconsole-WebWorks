@@ -14,7 +14,7 @@ function stringify(o, simple) {
   var json = '', i, type = ({}).toString.call(o), parts = [], names = [];
   
   if (type == '[object String]') {
-    json = '"' + o.replace(/"/g, '\\"') + '"';
+    json = '"' + o.replace(/\n/g, '\\n').replace(/"/g, '\\"') + '"';
   } else if (type == '[object Array]') {
     json = '[';
     for (i = 0; i < o.length; i++) {
@@ -68,9 +68,9 @@ function stringify(o, simple) {
 
 function getRemoteScript() {
   var scripts = document.getElementsByTagName('script'),
-      remoteScript = null;
+      remoteScript = scripts[scripts.length-1];
   for (var i = 0; i < scripts.length; i++) {
-    if (scripts[i].src.indexOf('jsconsole.com/remote.js') !== -1) {
+    if (/jsconsole\..*(:\d+)?\/remote.js/.test(scripts[i].src)) {
       remoteScript = scripts[i];
       break;
     }
@@ -169,7 +169,7 @@ remoteFrame.onload = function () {
   remoteWindow = remoteFrame.contentWindow;
   remoteWindow.postMessage('__init__', origin);
   
-  remoteWindow.postMessage(stringify({ response: 'Connection established with ' + navigator.userAgent, type: 'info' }), origin);
+  remoteWindow.postMessage(stringify({ response: 'Connection established with ' + window.location.toString() + '\n' + navigator.userAgent, type: 'info' }), origin);
   
   for (var i = 0; i < queue.length; i++) {
     remoteWindow.postMessage(queue[i], origin);
@@ -178,10 +178,28 @@ remoteFrame.onload = function () {
 
 window.remote = remote;
 
+window.addEventListener && window.addEventListener('error', function (event) {
+  remote.error({ message: event.message }, event.filename + ':' + event.lineno);
+}, false);
+
 try {
   window.console = remote;
 } catch (e) {
   console.log('cannot overwrite existing console object');
 }
+
+function warnUsage() {
+  var useSS = false;
+  try {
+    sessionStorage.getItem('foo');
+    useSS = true;
+  } catch (e) {}
+  if (!(useSS ? sessionStorage.jsconsole : window.name)) {
+    if (useSS) sessionStorage.jsconsole = 1; else window.name = 1;
+    alert('You will see this warning once per session.\n\nYou are using a remote control script on this site - if you accidently push it to production, anyone will have control of your visitor\'s browser. Remember to remove this script.');
+  }
+}
+
+warnUsage();
 
 })();

@@ -5,26 +5,47 @@ function sortci(a, b) {
 }
 
 // custom because I want to be able to introspect native browser objects *and* functions
-function stringify(o, simple) {
-  var json = '', i, type = ({}).toString.call(o), parts = [], names = [];
+function stringify(o, simple, visited) {
+  var json = '', i, vi, type = '', parts = [], names = [], circular = false;
+  visited = visited || [];
   
-  if (type == '[object String]') {
+  try {
+    type = ({}).toString.call(o);
+  } catch (e) { // only happens when typeof is protected (...randomly)
+    type = '[object Object]';
+  }
+
+  // check for circular references
+  for (vi = 0; vi < visited.length; vi++) {
+    if (o === visited[vi]) {
+      circular = true; 
+      break;
+    }
+  }
+
+  if (circular) {
+    json = '[circular]';
+  } else if (type == '[object String]') {
     json = '"' + o.replace(/"/g, '\\"') + '"';
   } else if (type == '[object Array]') {
+    visited.push(o);
+
     json = '[';
     for (i = 0; i < o.length; i++) {
-      parts.push(stringify(o[i], simple));
+      parts.push(stringify(o[i], simple, visited));
     }
     json += parts.join(', ') + ']';
     json;
   } else if (type == '[object Object]') {
+    visited.push(o);
+
     json = '{';
     for (i in o) {
       names.push(i);
     }
     names.sort(sortci);
     for (i = 0; i < names.length; i++) {
-      parts.push(stringify(names[i]) + ': ' + stringify(o[names[i] ], simple));
+      parts.push( stringify(names[i], undefined, visited) + ': ' + stringify(o[ names[i] ], simple, visited) );
     }
     json += parts.join(', ') + '}';
   } else if (type == '[object Number]') {
@@ -38,13 +59,22 @@ function stringify(o, simple) {
   } else if (o === undefined) {
     json = 'undefined';
   } else if (simple == undefined) {
+    visited.push(o);
+
     json = type + '{\n';
     for (i in o) {
       names.push(i);
     }
     names.sort(sortci);
     for (i = 0; i < names.length; i++) {
-      parts.push(names[i] + ': ' + stringify(o[names[i]], true)); // safety from max stack
+      try {
+        parts.push(names[i] + ': ' + stringify(o[names[i]], true, visited)); // safety from max stack
+      } catch (e) {
+        if (e.name == 'NS_ERROR_NOT_IMPLEMENTED') {
+          // do nothing - not sure it's useful to show this error when the variable is protected
+          // parts.push(names[i] + ': NS_ERROR_NOT_IMPLEMENTED');
+        }
+      }
     }
     json += parts.join(',\n') + '\n}';
   } else {
@@ -56,7 +86,7 @@ function stringify(o, simple) {
 }
 
 function cleanse(s) {
-  return (s||'').replace(/[<>&]/g, function (m) { return {'&':'&amp;','>':'&gt;','<':'&lt;'}[m];});
+  return (s||'').replace(/[<&]/g, function (m) { return {'&':'&amp;','<':'&lt;'}[m];});
 }
 
 function run(cmd) {
@@ -74,7 +104,7 @@ function run(cmd) {
     xhr.open('POST', 'http://jsconsole.com/remote/' + remoteId + '/run', true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.send(params);
-	setCursorTo('');
+    setCursorTo('');
     return ['info', 'sent remote command'];
   } else {
     try {
@@ -161,20 +191,19 @@ function echo(cmd) {
 
   logAfter = null;
 
-  if (document.querySelectorAll) {
-    logAfter = output.querySelectorAll('li.echo')[0] || null;
+  if (output.querySelector) {
+    logAfter = output.querySelector('li.echo') || null;
   } else {
     var lis = document.getElementsByTagName('li'),
-        len = lis.length;
-    for (var i = 0; i < len; i++) {
+        len = lis.length,
+        i;
+    for (i = 0; i < len; i++) {
       if (lis[i].className.indexOf('echo') !== -1) {
         logAfter = lis[i];
         break;
       }
     }
   }
-
-  // logAfter = output.querySelectorAll('li.echo')[0] || null;
   appendLog(li, true);
 }
 
@@ -184,7 +213,7 @@ window.info = function(cmd) {
   li.className = 'info';
   li.innerHTML = '<span class="gutter"></span><div>' + cleanse(cmd) + '</div>';
 
-  // logAfter = output.querySelectorAll('li.echo')[0] || null;
+  // logAfter = output.querySelector('li.echo') || null;
   // appendLog(li, true);
   appendLog(li);
 }
@@ -208,15 +237,21 @@ function appendLog(el, echo) {
 }
 
 function changeView(event){
-  if (enableCC) return;
+  if (false && enableCC) return;
 
   var which = event.which || event.keyCode;
   if (which == 38 && event.shiftKey == true) {
     body.className = '';
     cursor.focus();
+    try {
+      localStorage.large = 0;
+    } catch (e) {}
     return false;
   } else if (which == 40 && event.shiftKey == true) {
     body.className = 'large';
+    try {
+      localStorage.large = 1;
+    } catch (e) {}
     cursor.focus();
     return false;
   }
@@ -242,9 +277,9 @@ function showhelp() {
     ':clear - to clear the history (accessed using cursor keys)',
     ':blackberry - remove the sandbox and connect the console to the window directly <br />      Allows you to make WebWorks calls. Type <b>blackberry</b> to take a peak.',
     ':sandbox - return to sandbox mode from blackberry mode.',
-    ':quit',
-    ':about'
-    //'Directions to <a href="/inject.html">inject</a> JS Console in to any page (useful for mobile debugging)'
+    ':history - list current session history',
+    ':about',
+    ''
   ];
 
   if (injected) {
@@ -448,10 +483,8 @@ function codeComplete(event) {
     } else {
       props = getProps(parts.slice(0, parts.length - 1).join('.') || 'window', parts[parts.length - 1]);
     }
-
     if (props.length) {
       if (which == 9) { // tabbing cycles through the code completion
-
         // however if there's only one selection, it'll auto complete
         if (props.length === 1) {
           ccPosition = false;
@@ -497,6 +530,7 @@ function codeComplete(event) {
 }
 
 function removeSuggestion() {
+  if (!enableCC) exec.setAttribute('rows', 1);
   if (enableCC && cursor.nextSibling) cursor.parentNode.removeChild(cursor.nextSibling);
 }
 
@@ -583,7 +617,6 @@ var exec = document.getElementById('exec'),
     myHistory = getHistory(),
     liveHistory = (window.myHistory.pushState !== undefined),
     pos = 0,
-    wide = true,
     libraries = {
         jquery: 'http://ajax.googleapis.com/ajax/libs/jquery/1/jquery.min.js',
         prototype: 'http://ajax.googleapis.com/ajax/libs/prototype/1/prototype.js',
@@ -596,13 +629,14 @@ var exec = document.getElementById('exec'),
     },
     body = document.getElementsByTagName('body')[0],
     logAfter = null,
-    historySupported = !!(window.myHistory && window.myHistory.pushState),
-    ccTimer = null,
+    historySupported = !!(window.history && window.history.pushState),
     sse = null,
     lastCmd = null,
     remoteId = null,
-    commands = {
-      help: showhelp,
+    codeCompleteTimer = null,
+    keypressTimer = null,
+    commands = { 
+      help: showhelp, 
       about: about,
       // loadjs: loadScript,
       load: load,
@@ -628,7 +662,9 @@ var exec = document.getElementById('exec'),
         window[callback] = function (id) {
           remoteId = id;
           if (sse !== null) sse.close();
+
           sse = new EventSource('http://jsconsole.com/remote/' + id + '/log');
+
           sse.onopen = function () {
             remoteId = id;
             window.top.info('Connected to "' + id + '"\n\n<script src="http://jsconsole.com/remote.js?' + id + '"></script>');
@@ -699,17 +735,32 @@ var exec = document.getElementById('exec'),
           blackberry.app.exit();
       }
     },
+    fakeInput = null,
     // I hate that I'm browser sniffing, but there's issues with Firefox and execCommand so code completion won't work
     iOSMobile = navigator.userAgent.indexOf('AppleWebKit') !== -1 && navigator.userAgent.indexOf('Mobile') !== -1,
+<<<<<<< HEAD
     //TODO: figure out why this is not working as intended in webworks.  It seems like touch events inside the "contenteditable" span
     //do not work correctly so that we are not bringing up the keyboard when we should.
     //also our keyboard if the user swiped it up does not always write to the view.
     enableCC = false && navigator.userAgent.indexOf('AppleWebKit') !== -1 && navigator.userAgent.indexOf('Mobile') === -1;
+=======
+    // FIXME Remy, seriously, don't sniff the agent like this, it'll bite you in the arse.
+    enableCC = navigator.userAgent.indexOf('AppleWebKit') !== -1 && navigator.userAgent.indexOf('Mobile') === -1 || navigator.userAgent.indexOf('OS 5_') !== -1;
+>>>>>>> upstream/master
 
 if (enableCC) {
-  exec.parentNode.innerHTML = '<div autofocus id="exec" spellcheck="false"><span id="cursor" contenteditable></span></div>';
+  exec.parentNode.innerHTML = '<div autofocus id="exec" autocapitalize="off" spellcheck="false"><span id="cursor" spellcheck="false" autocapitalize="off" autocorrect="off"' + (iOSMobile ? '' : ' contenteditable') + '></span></div>';
   exec = document.getElementById('exec');
   cursor = document.getElementById('cursor');
+}
+
+if (enableCC && iOSMobile) {
+  fakeInput = document.createElement('input');
+  fakeInput.className = 'fakeInput';
+  fakeInput.setAttribute('spellcheck', 'false');
+  fakeInput.setAttribute('autocorrect', 'off');
+  fakeInput.setAttribute('autocapitalize', 'off');
+  exec.parentNode.appendChild(fakeInput);
 }
 
 if (!injected) {
@@ -741,12 +792,16 @@ function whichKey(event) {
 }
 
 function setCursorTo(str) {
-  str = cleanse(str);
+  str = enableCC ? cleanse(str) : str;
   exec.value = str;
+  
   if (enableCC) {
     document.execCommand('selectAll', false, null);
     document.execCommand('delete', false, null);
     document.execCommand('insertHTML', false, str);
+  } else {
+    var rows = str.match(/\n/g);
+    exec.setAttribute('rows', rows !== null ? rows.length + 1 : 1);
   }
   cursor.focus();
   window.scrollTo(0,0);
@@ -772,10 +827,36 @@ exec.ontouchstart = function () {
 
 exec.onkeyup = function (event) {
   var which = whichKey(event);
-  clearTimeout(ccTimer);
-  if (enableCC && which != 9 && which != 16) setTimeout(function () {
-    codeComplete(event);
-  }, 200);
+
+  if (enableCC && which != 9 && which != 16) {
+    clearTimeout(codeCompleteTimer);
+    codeCompleteTimer = setTimeout(function () {
+      codeComplete(event);
+    }, 200);
+  } 
+};
+
+if (enableCC) {
+  // disabled for now
+  cursor.__onpaste = function (event) {
+    setTimeout(function () {
+      // this causes the field to lose focus - I'll leave it here for a while, see how we get on.
+      // what I need to do is rip out the contenteditable and replace it with something entirely different
+      cursor.innerHTML = cursor.innerText;
+      // setCursorTo(cursor.innerText);
+    }, 10);
+  };
+}
+
+function findNode(list, node) {
+  var pos = 0;
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] == node) {
+      return pos;
+    }
+    pos += list[i].nodeValue.length;
+  }
+  return -1;
 }
 
 exec.onkeydown = function (event) {
@@ -788,32 +869,64 @@ exec.onkeydown = function (event) {
   if (keys[which]) {
     if (event.shiftKey) {
       changeView(event);
-    } else if (!wide) {
+    } else if (!wide) { // history cycle
+      if (enableCC && window.getSelection) {
+        window.selObj = window.getSelection();
+        var selRange = selObj.getRangeAt(0);
+        
+        cursorPos =  findNode(selObj.anchorNode.parentNode.childNodes, selObj.anchorNode) + selObj.anchorOffset;
+        var value = exec.value,
+            firstnl = value.indexOf('\n'),
+            lastnl = value.lastIndexOf('\n');
+
+        if (firstnl !== -1) {
+          if (which == 38 && cursorPos > firstnl) {
+            return;
+          } else if (which == 40 && cursorPos < lastnl) {
+            return;
+          }
+        }
+      }
+      
       if (which == 38) { // cycle up
         pos--;
-        if (pos < 0) pos = myHistory.length - 1;
+
+        if (pos < 0) pos = 0; //history.length - 1;
       } else if (which == 40) { // down
         pos++;
-        if (pos >= myHistory.length) pos = 0;
-      }
-      if (myHistory[pos] != undefined) {
+        if (pos >= history.length) pos = history.length; //0;
+      } 
+      if (history[pos] != undefined && history[pos] !== '') {
+
         removeSuggestion();
         setCursorTo(myHistory[pos])
         return false;
+      } else if (pos == history.length) {
+        removeSuggestion();
+        setCursorTo('');
+        return false;
       }
     }
-  } else if (which == 13 || which == 10) { // enter (what about the other one)
+  } else if ((which == 13 || which == 10) && event.shiftKey == false) { // enter (what about the other one)
     removeSuggestion();
     if (event.shiftKey == true || event.metaKey || event.ctrlKey || !wide) {
-      post(exec.textContent || exec.value);
+      var command = exec.textContent || exec.value;
+      if (command.length) post(command);
       return false;
     }
+  } else if ((which == 13 || which == 10) && !enableCC && event.shiftKey == true) {
+    // manually expand the textarea when we don't have code completion turned on
+    var rows = exec.value.match(/\n/g);
+    rows = rows != null ? rows.length + 2 : 2;
+    exec.setAttribute('rows', rows);
   } else if (which == 9 && wide) {
     checkTab(event);
   } else if (event.shiftKey && event.metaKey && which == 8) {
     output.innerHTML = '';
   } else if ((which == 39 || which == 35) && ccPosition !== false) { // complete code
     completeCode();
+  } else if (event.ctrlKey && which == 76) {
+    output.innerHTML = '';
   } else if (enableCC) { // try code completion
     if (ccPosition !== false && which == 9) {
       codeComplete(event); // cycles available completions
@@ -823,6 +936,59 @@ exec.onkeydown = function (event) {
     }
   }
 };
+
+if (enableCC && iOSMobile) {
+  fakeInput.onkeydown = function (event) {
+    removeSuggestion();
+    var which = whichKey(event);
+    
+    if (which == 13 || which == 10) {
+      post(this.value);
+      this.value = '';
+      cursor.innerHTML = '';
+      return false;
+    }
+  };
+
+  fakeInput.onkeyup = function (event) {
+    cursor.innerHTML = cleanse(this.value);
+    var which = whichKey(event);
+    if (enableCC && which != 9 && which != 16) {
+      clearTimeout(codeCompleteTimer);
+      codeCompleteTimer = setTimeout(function () {
+        codeComplete(event);
+      }, 200);
+    } 
+  };
+
+  var fakeInputFocused = false;
+
+  var dblTapTimer = null,
+      taps = 0;
+
+  form.addEventListener('touchstart', function (event) {
+    // window.scrollTo(0,0);
+    if (ccPosition !== false) {
+      event.preventDefault();
+      clearTimeout(dblTapTimer);
+      taps++;
+
+      if (taps === 2) {
+        completeCode();
+        fakeInput.value = cursor.textContent;
+        removeSuggestion();
+        fakeInput.focus();
+      } else {
+        dblTapTimer = setTimeout(function () {
+          taps = 0;
+          codeComplete({ which: 9 });
+        }, 200);
+      }
+    }
+
+    return false;
+  });
+}
 
 function completeCode(focus) {
   var tmp = exec.textContent, l = tmp.length;
@@ -891,9 +1057,20 @@ setTimeout(function () {
   window.scrollTo(0, 1);
 }, 500);
 
+setTimeout(function () {
+  document.getElementById('footer').className = 'hidden';
+}, 5000);
+
 getProps('window'); // cache 
 
-document.addEventListener('deviceready', function () {
+try {
+  if (!!(localStorage.large*1)) {
+    document.body.className = 'large';
+  }
+} catch (e) {}
+
+
+if (document.addEventListener) document.addEventListener('deviceready', function () {
   cursor.focus();
 }, false);
 

@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" manifest="jsconsole.appcache">
 <head>
 <meta charset="utf-8" />
 <title>JavaScript console - for debugging JavaScript and remote debugging mobile web apps</title>
-<meta id="meta" name="viewport" content="width=device-width; user-scalable=no; initial-scale=1.0" />
+<meta id="meta" name="viewport" content="width=device-width, user-scalable=no, initial-scale=1" />
 <!-- 
 
  Hey there fellow JavaScript lover - I assume you've got a soft spot
@@ -35,13 +35,13 @@
 <link rel="icon" href="/favicon.png" type="image/png">
 <link rel='apple-touch-icon' href='/favicon.png' />
 <meta name="apple-mobile-web-app-capable" content="yes" />
-<meta names="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<link href='/startup.png' rel='apple-touch-startup-image' />
-<link rel="stylesheet" href="console.css" type="text/css" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+<link href="/startup.png" rel="apple-touch-startup-image" />
+<link rel="stylesheet" href="console.css" />
 </head>
 <body>
 <form>
-  <textarea id="exec"  spellcheck="false" autocapitalize="off" rows="1"></textarea>
+<textarea autofocus id="exec" spellcheck="false" autocapitalize="off" rows="1" autocorrect="off"></textarea>
 </form>
 <div id="console">
   <ul id="output"></ul>
@@ -55,5 +55,6 @@
 var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
 g.async=1;g.src='//www.google-analytics.com/ga.js';s.parentNode.insertBefore(g,s)
 })(document,'script')</script>
+
 </body>
 </html>
