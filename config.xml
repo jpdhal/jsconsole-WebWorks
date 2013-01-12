@@ -1,19 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<widget xmlns="http://www.w3.org/ns/widgets" xmlns:rim="http://www.blackberry.com/ns/widgets" version="1.0.0" rim:header="RIM-Widget:rim/widget">
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:rim="http://www.blackberry.com/ns/widgets" version="3.0.0.13" rim:header="RIM-Widget:rim/widget" id='JSConsole'>
   <name>JS Console</name>
   <description>Blackberry 10 Application That Launches an Interactive JavaScript Console</description>
-  <author rim:copyright="2011">Quark Mobility and Remy Sharp</author>
+  <author>Quark Mobility</author>
   <icon rim:hover="false" src="js-icon.png"/>
   <icon rim:hover="true" src="js-icon.png"/>
   <content src="index.html"/>
   <access uri="*"></access>
   <feature id="blackberry.app" version="1.0.0"/> 
   <feature id="blackberry.invoke" version="1.0.0"/>
-  <feature id="blackberry.app.event" version="1.0.0"/> 
   <feature id="blackberry.system" version="1.0.0"/> 
-  <feature id="blackberry.system.event" version="1.0.0"/> 
   <feature id="blackberry.ui.dialog" version="1.0.0"/>
-  <feature id="blackberry.utils" version="1.0.0"/> 
   <feature id="blackberry.invoke" />
   <feature id="blackberry.invoke.card" />
   <feature id="blackberry.io" />
