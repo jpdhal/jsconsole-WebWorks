@@ -5,10 +5,14 @@
  */
 var PlaybookExtentions = {};
 var bb;
-try{
-bb = blackberry;
-} catch(e){}
-
+function onwebworksready() {
+	bb = blackberry;
+}
+function onload() {
+	window.removeEventListener('load', onload, false);
+	document.addEventListener('webworksready', onwebworksready, false);
+}
+window.addEventListener('load', onload, false);
 PlaybookExtentions.runBrowser = function(theUrl) {
     var args = new bb.invoke.BrowserArguments(theUrl);
     bb.invoke.invoke(bb.invoke.APP_BROWSER, args);

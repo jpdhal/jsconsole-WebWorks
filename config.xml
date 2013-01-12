@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <widget xmlns="http://www.w3.org/ns/widgets" xmlns:rim="http://www.blackberry.com/ns/widgets" version="1.0.0" rim:header="RIM-Widget:rim/widget">
   <name>JS Console</name>
-  <description>Playbook Application That Launches an Interactive JavaScript Console</description>
+  <description>Blackberry 10 Application That Launches an Interactive JavaScript Console</description>
   <author rim:copyright="2011">Quark Mobility and Remy Sharp</author>
   <icon rim:hover="false" src="js-icon.png"/>
   <icon rim:hover="true" src="js-icon.png"/>
@@ -14,6 +14,16 @@
   <feature id="blackberry.system.event" version="1.0.0"/> 
   <feature id="blackberry.ui.dialog" version="1.0.0"/>
   <feature id="blackberry.utils" version="1.0.0"/> 
+  <feature id="blackberry.invoke" />
+  <feature id="blackberry.invoke.card" />
+  <feature id="blackberry.io" />
+  <feature id="blackberry.ui.toast" />
+  <feature id="blackberry.pim.calendar" />
 
+
+  <rim:permissions>
+      <rim:permit>access_shared</rim:permit>
+      <rim:permit>access_pimdomain_calendars</rim:permit> 
+  </rim:permissions>
   
 </widget>

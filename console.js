@@ -126,7 +126,7 @@ function post(cmd, blind, response /* passed in when echoing from remote console
     setHistory(myHistory);
 
     if (historySupported) {
-      window.myHistory.pushState(cmd, cmd, '?' + encodeURIComponent(cmd));
+      window.history.pushState(cmd, cmd, '?' + encodeURIComponent(cmd));
     }
   }
 
@@ -277,6 +277,7 @@ function showhelp() {
     ':clear - to clear the history (accessed using cursor keys)',
     ':blackberry - remove the sandbox and connect the console to the window directly <br />      Allows you to make WebWorks calls. Type <b>blackberry</b> to take a peak.',
     ':sandbox - return to sandbox mode from blackberry mode.',
+    ':togglecc - enable or disable Code Completion <b>beta</b>',
     ':history - list current session history',
     ':about',
     ''
@@ -615,7 +616,7 @@ var exec = document.getElementById('exec'),
     mode = 'sandbox'
     fakeConsole = 'window.top._console',
     myHistory = getHistory(),
-    liveHistory = (window.myHistory.pushState !== undefined),
+    liveHistory = (window.history.pushState !== undefined),
     pos = 0,
     libraries = {
         jquery: 'http://ajax.googleapis.com/ajax/libs/jquery/1/jquery.min.js',
@@ -733,6 +734,16 @@ var exec = document.getElementById('exec'),
       },
       quit : function(){
           blackberry.app.exit();
+      },
+      togglecc : function(){
+        if(enableCC){
+          disableCodeComplete();
+          return "Code Complete Disabled";
+        }
+        else{
+          enableCodeComplete();
+          return "Code Complete Enabled! <br><b>Tap</b> once to change the suggestion. <br><b>Double Tap</b> to select the suggestion";
+        }
       }
     },
     fakeInput = null,
@@ -741,22 +752,195 @@ var exec = document.getElementById('exec'),
     //TODO: figure out why this is not working as intended in webworks.  It seems like touch events inside the "contenteditable" span
     //do not work correctly so that we are not bringing up the keyboard when we should.
     //also our keyboard if the user swiped it up does not always write to the view.
-    enableCC = false && navigator.userAgent.indexOf('AppleWebKit') !== -1 && navigator.userAgent.indexOf('Mobile') === -1;
+    enableCC = navigator.userAgent.indexOf('AppleWebKit') === -1 && navigator.userAgent.indexOf('Mobile') === -1;
 
 
 if (enableCC) {
-  exec.parentNode.innerHTML = '<div autofocus id="exec" autocapitalize="off" spellcheck="false"><span id="cursor" spellcheck="false" autocapitalize="off" autocorrect="off"' + (iOSMobile ? '' : ' contenteditable') + '></span></div>';
+  enableCodeComplete();
+} else{
+  bindexec()
+}
+  
+
+function enableCodeComplete(){
+  enableCC = true;
+  exec.parentNode.innerHTML = '<div autofocus id="exec" autocapitalize="off"  autocomplete="off" spellcheck="false"><span id="cursor" spellcheck="false" autocapitalize="off" autocorrect="off"' + (iOSMobile ? '' : ' contenteditable') + '></span></div>';
   exec = document.getElementById('exec');
   cursor = document.getElementById('cursor');
+  bindexec();
+  if (iOSMobile) {
+    fakeInput = document.createElement('input');
+    fakeInput.className = 'fakeInput';
+    fakeInput.setAttribute('spellcheck', 'false');
+    fakeInput.setAttribute('autocorrect', 'off');
+    fakeInput.setAttribute('autocapitalize', 'off');
+    fakeInput.setAttribute('autocomplete', 'off');
+    exec.parentNode.appendChild(fakeInput);
+    fakeInput.onkeydown = function (event) {
+      removeSuggestion();
+      var which = whichKey(event);
+      
+      if (which == 13 || which == 10) {
+        post(this.value);
+        this.value = '';
+        cursor.innerHTML = '';
+        return false;
+      }
+    };
+
+    fakeInput.onkeyup = function (event) {
+      cursor.innerHTML = cleanse(this.value);
+      var which = whichKey(event);
+      if (enableCC && which != 9 && which != 16) {
+        clearTimeout(codeCompleteTimer);
+        codeCompleteTimer = setTimeout(function () {
+          codeComplete(event);
+        }, 200);
+      } 
+    };
+
+    var fakeInputFocused = false;
+
+    var dblTapTimer = null,
+        taps = 0;
+
+    form.addEventListener('touchstart', function (event) {
+      // window.scrollTo(0,0);
+      if (ccPosition !== false) {
+        event.preventDefault();
+        clearTimeout(dblTapTimer);
+        taps++;
+
+        if (taps === 2) {
+          completeCode();
+          fakeInput.value = cursor.textContent;
+          removeSuggestion();
+          fakeInput.focus();
+        } else {
+          dblTapTimer = setTimeout(function () {
+            taps = 0;
+            codeComplete({ which: 9 });
+          }, 200);
+        }
+      }
+
+      return false;
+    });
+  }
+
 }
 
-if (enableCC && iOSMobile) {
-  fakeInput = document.createElement('input');
-  fakeInput.className = 'fakeInput';
-  fakeInput.setAttribute('spellcheck', 'false');
-  fakeInput.setAttribute('autocorrect', 'off');
-  fakeInput.setAttribute('autocapitalize', 'off');
-  exec.parentNode.appendChild(fakeInput);
+
+function disableCodeComplete(){
+  enableCC = false
+
+  exec.parentNode.innerHTML = '<textarea autofocus id="exec" spellcheck="false" autocapitalize="off" rows="1" autocorrect="off" autocomplete="off"></textarea>';
+  cursor = exec = document.getElementById('exec');
+  if(iOSMobile){
+    exec.parentNode.removeChild(fakeInput);
+    fakeInput = null;
+  }
+
+  bindexec();
+}
+
+function bindexec(){
+  exec.ontouchstart = function () {
+    window.scrollTo(0,0);
+  };
+
+  exec.onkeyup = function (event) {
+    var which = whichKey(event);
+
+    if (enableCC && which != 9 && which != 16) {
+      clearTimeout(codeCompleteTimer);
+      codeCompleteTimer = setTimeout(function () {
+        codeComplete(event);
+      }, 200);
+    } 
+  };
+  exec.onkeydown = function (event) {
+    event = event || window.event;
+    var keys = {38:1, 40:1},
+        wide = body.className == 'large',
+        which = whichKey(event);
+
+    if (typeof which == 'string') which = which.replace(/\/U\+/, '\\u');
+    if (keys[which]) {
+      if (event.shiftKey) {
+        changeView(event);
+      } else if (!wide) { // history cycle
+        if (enableCC && window.getSelection) {
+          window.selObj = window.getSelection();
+          var selRange = selObj.getRangeAt(0);
+          
+          cursorPos =  findNode(selObj.anchorNode.parentNode.childNodes, selObj.anchorNode) + selObj.anchorOffset;
+          var value = exec.value,
+              firstnl = value.indexOf('\n'),
+              lastnl = value.lastIndexOf('\n');
+
+          if (firstnl !== -1) {
+            if (which == 38 && cursorPos > firstnl) {
+              return;
+            } else if (which == 40 && cursorPos < lastnl) {
+              return;
+            }
+          }
+        }
+        
+        if (which == 38) { // cycle up
+          pos--;
+
+          if (pos < 0) pos = 0; //history.length - 1;
+        } else if (which == 40) { // down
+          pos++;
+          if (pos >= history.length) pos = history.length; //0;
+        } 
+        if (history[pos] != undefined && history[pos] !== '') {
+
+          removeSuggestion();
+          setCursorTo(myHistory[pos])
+          return false;
+        } else if (pos == history.length) {
+          removeSuggestion();
+          setCursorTo('');
+          return false;
+        }
+      }
+    } else if ((which == 13 || which == 10) && event.shiftKey == false) { // enter (what about the other one)
+      removeSuggestion();
+      if (event.shiftKey == true || event.metaKey || event.ctrlKey || !wide) {
+        var command = exec.textContent || exec.value;
+        if (command.length) post(command);
+        return false;
+      }
+    } else if ((which == 13 || which == 10) && !enableCC && event.shiftKey == true) {
+      // manually expand the textarea when we don't have code completion turned on
+      var rows = exec.value.match(/\n/g);
+      rows = rows != null ? rows.length + 2 : 2;
+      exec.setAttribute('rows', rows);
+    } else if (which == 9 && wide) {
+      checkTab(event);
+    } else if (event.shiftKey && event.metaKey && which == 8) {
+      output.innerHTML = '';
+    } else if ((which == 39 || which == 35) && ccPosition !== false) { // complete code
+      completeCode();
+    } else if (event.ctrlKey && which == 76) {
+      output.innerHTML = '';
+    } else if (enableCC) { // try code completion
+      if (ccPosition !== false && which == 9) {
+        codeComplete(event); // cycles available completions
+        return false;
+      } else if (ccPosition !== false && cursor.nextSibling) {
+        removeSuggestion();
+      }
+    }
+  };
+
+  exec.onclick = function () {
+    cursor.focus();
+  }
+
 }
 
 if (!injected) {
@@ -810,27 +994,14 @@ output.ontouchstart = output.onclick = function (event) {
     setCursorTo(command);
 
     if (liveHistory) {
-      window.myHistory.pushState(command, command, event.target.href);
+      window.history.pushState(command, command, event.target.href);
     }
 
     return false;
   }
 };
 
-exec.ontouchstart = function () {
-  window.scrollTo(0,0);
-};
 
-exec.onkeyup = function (event) {
-  var which = whichKey(event);
-
-  if (enableCC && which != 9 && which != 16) {
-    clearTimeout(codeCompleteTimer);
-    codeCompleteTimer = setTimeout(function () {
-      codeComplete(event);
-    }, 200);
-  } 
-};
 
 if (enableCC) {
   // disabled for now
@@ -853,137 +1024,6 @@ function findNode(list, node) {
     pos += list[i].nodeValue.length;
   }
   return -1;
-}
-
-exec.onkeydown = function (event) {
-  event = event || window.event;
-  var keys = {38:1, 40:1},
-      wide = body.className == 'large',
-      which = whichKey(event);
-
-  if (typeof which == 'string') which = which.replace(/\/U\+/, '\\u');
-  if (keys[which]) {
-    if (event.shiftKey) {
-      changeView(event);
-    } else if (!wide) { // history cycle
-      if (enableCC && window.getSelection) {
-        window.selObj = window.getSelection();
-        var selRange = selObj.getRangeAt(0);
-        
-        cursorPos =  findNode(selObj.anchorNode.parentNode.childNodes, selObj.anchorNode) + selObj.anchorOffset;
-        var value = exec.value,
-            firstnl = value.indexOf('\n'),
-            lastnl = value.lastIndexOf('\n');
-
-        if (firstnl !== -1) {
-          if (which == 38 && cursorPos > firstnl) {
-            return;
-          } else if (which == 40 && cursorPos < lastnl) {
-            return;
-          }
-        }
-      }
-      
-      if (which == 38) { // cycle up
-        pos--;
-
-        if (pos < 0) pos = 0; //history.length - 1;
-      } else if (which == 40) { // down
-        pos++;
-        if (pos >= history.length) pos = history.length; //0;
-      } 
-      if (history[pos] != undefined && history[pos] !== '') {
-
-        removeSuggestion();
-        setCursorTo(myHistory[pos])
-        return false;
-      } else if (pos == history.length) {
-        removeSuggestion();
-        setCursorTo('');
-        return false;
-      }
-    }
-  } else if ((which == 13 || which == 10) && event.shiftKey == false) { // enter (what about the other one)
-    removeSuggestion();
-    if (event.shiftKey == true || event.metaKey || event.ctrlKey || !wide) {
-      var command = exec.textContent || exec.value;
-      if (command.length) post(command);
-      return false;
-    }
-  } else if ((which == 13 || which == 10) && !enableCC && event.shiftKey == true) {
-    // manually expand the textarea when we don't have code completion turned on
-    var rows = exec.value.match(/\n/g);
-    rows = rows != null ? rows.length + 2 : 2;
-    exec.setAttribute('rows', rows);
-  } else if (which == 9 && wide) {
-    checkTab(event);
-  } else if (event.shiftKey && event.metaKey && which == 8) {
-    output.innerHTML = '';
-  } else if ((which == 39 || which == 35) && ccPosition !== false) { // complete code
-    completeCode();
-  } else if (event.ctrlKey && which == 76) {
-    output.innerHTML = '';
-  } else if (enableCC) { // try code completion
-    if (ccPosition !== false && which == 9) {
-      codeComplete(event); // cycles available completions
-      return false;
-    } else if (ccPosition !== false && cursor.nextSibling) {
-      removeSuggestion();
-    }
-  }
-};
-
-if (enableCC && iOSMobile) {
-  fakeInput.onkeydown = function (event) {
-    removeSuggestion();
-    var which = whichKey(event);
-    
-    if (which == 13 || which == 10) {
-      post(this.value);
-      this.value = '';
-      cursor.innerHTML = '';
-      return false;
-    }
-  };
-
-  fakeInput.onkeyup = function (event) {
-    cursor.innerHTML = cleanse(this.value);
-    var which = whichKey(event);
-    if (enableCC && which != 9 && which != 16) {
-      clearTimeout(codeCompleteTimer);
-      codeCompleteTimer = setTimeout(function () {
-        codeComplete(event);
-      }, 200);
-    } 
-  };
-
-  var fakeInputFocused = false;
-
-  var dblTapTimer = null,
-      taps = 0;
-
-  form.addEventListener('touchstart', function (event) {
-    // window.scrollTo(0,0);
-    if (ccPosition !== false) {
-      event.preventDefault();
-      clearTimeout(dblTapTimer);
-      taps++;
-
-      if (taps === 2) {
-        completeCode();
-        fakeInput.value = cursor.textContent;
-        removeSuggestion();
-        fakeInput.focus();
-      } else {
-        dblTapTimer = setTimeout(function () {
-          taps = 0;
-          codeComplete({ which: 9 });
-        }, 200);
-      }
-    }
-
-    return false;
-  });
 }
 
 function completeCode(focus) {
@@ -1036,13 +1076,10 @@ document.onkeydown = function (event) {
   return changeView(event);
 };
 
-exec.onclick = function () {
-  cursor.focus();
-}
 if (window.location.search) {
-  post(decodeURIComponent(window.location.search.substr(1)));
-} else {
-  post(':help', true);
+    post(decodeURIComponent(window.location.search.substr(1)));
+  } else {
+    post(':help', true);
 }
 
 window.onpopstate = function (event) {
