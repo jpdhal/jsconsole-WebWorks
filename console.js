@@ -738,15 +738,11 @@ var exec = document.getElementById('exec'),
     fakeInput = null,
     // I hate that I'm browser sniffing, but there's issues with Firefox and execCommand so code completion won't work
     iOSMobile = navigator.userAgent.indexOf('AppleWebKit') !== -1 && navigator.userAgent.indexOf('Mobile') !== -1,
-<<<<<<< HEAD
     //TODO: figure out why this is not working as intended in webworks.  It seems like touch events inside the "contenteditable" span
     //do not work correctly so that we are not bringing up the keyboard when we should.
     //also our keyboard if the user swiped it up does not always write to the view.
     enableCC = false && navigator.userAgent.indexOf('AppleWebKit') !== -1 && navigator.userAgent.indexOf('Mobile') === -1;
-=======
-    // FIXME Remy, seriously, don't sniff the agent like this, it'll bite you in the arse.
-    enableCC = navigator.userAgent.indexOf('AppleWebKit') !== -1 && navigator.userAgent.indexOf('Mobile') === -1 || navigator.userAgent.indexOf('OS 5_') !== -1;
->>>>>>> upstream/master
+
 
 if (enableCC) {
   exec.parentNode.innerHTML = '<div autofocus id="exec" autocapitalize="off" spellcheck="false"><span id="cursor" spellcheck="false" autocapitalize="off" autocorrect="off"' + (iOSMobile ? '' : ' contenteditable') + '></span></div>';
